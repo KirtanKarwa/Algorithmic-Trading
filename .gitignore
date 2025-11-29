@@ -1,0 +1,57 @@
+# OS/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+.env
+.env.*
+
+# Flask/SQLite runtime
+instance/
+Backend/instance/
+ai_trader.db
+Backend/ai_trader.db
+
+# Logs and generated artifacts
+Backend/logs/
+logs/
+**/equity.csv
+**/backtester.csv
+**/latest_signals.csv
+**/positions.csv
+**/trades.csv
+**/session_summary.txt
+**/summary.txt
+**/*_equity_*.csv
+**/*_trades_*.csv
+
+# Images/plots generated
+**/*.png
+
+# Frontend
+Frontend/node_modules/
+Frontend/.next/
+.next/
+*.log
+
+# Build outputs
+out/
+dist/
+coverage/
+.cache/
+
+# Secrets
+Backend/utils/api-key.env
+
+# Misc
+*.sqlite3
+*.db

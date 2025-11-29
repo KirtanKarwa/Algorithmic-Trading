@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies (if requirements.txt exists)
+        if: always()
+        run: |
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt found, skipping install"
+          fi
+
+      - name: Run linters (flake8) if available
+        run: |
+          if python -c "import importlib, sys; sys.exit(0 if importlib.util.find_spec('flake8') else 1)"; then
+            flake8 .
+          else
+            echo "flake8 not installed, skipping"
+          fi
+        continue-on-error: true
+
+      - name: Run tests (pytest) if tests present
+        run: |
+          if [ -d tests ] || ls | grep -E '^test|tests' >/dev/null 2>&1; then
+            pip install pytest || true
+            pytest -q
+          else
+            echo "No tests detected, skipping"
+          fi

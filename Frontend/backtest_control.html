@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Backtest Control Panel</title>
+	<!-- include the CSS: adjust path if your project structure differs -->
+	<link rel="stylesheet" href="css/backtest.css">
+</head>
+<body>
+	<!-- ...existing page markup... -->
+
+	<section class="backtest-panel" aria-labelledby="backtest-heading">
+		<header class="backtest-panel__header">
+			<h2 id="backtest-heading">Backtest Control Panel</h2>
+			<p class="muted">Quickly configure and run historical strategy simulations</p>
+		</header>
+
+		<form class="backtest-form" id="backtestForm" autocomplete="off">
+			<div class="row">
+				<div class="field">
+					<label for="symbol">Symbol</label>
+					<input id="symbol" name="symbol" type="text" value="BTCUSDT" />
+				</div>
+
+				<div class="field">
+					<label for="strategy">Strategy</label>
+					<select id="strategy" name="strategy">
+						<option>RSI EMA</option>
+						<!-- ...other strategies... -->
+					</select>
+				</div>
+
+				<div class="field">
+					<label for="interval">Interval</label>
+					<select id="interval" name="interval">
+						<option>1h</option>
+						<option>15m</option>
+						<option>4h</option>
+					</select>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="field">
+					<label for="start">Start Date</label>
+					<input id="start" name="start" type="date" value="2025-01-01" />
+				</div>
+
+				<div class="field">
+					<label for="end">End Date</label>
+					<input id="end" name="end" type="date" value="2025-02-01" />
+				</div>
+
+				<div class="field align-end">
+					<button type="submit" class="btn btn--primary" id="runBacktest">Run Backtest</button>
+				</div>
+			</div>
+
+			<!-- lightweight status area -->
+			<div class="backtest-panel__status" aria-live="polite">
+				<span class="status-dot status-dot--idle" aria-hidden="true"></span>
+				<span class="status-text">Idle</span>
+			</div>
+		</form>
+	</section>
+
+	<!-- ...existing page markup... -->
+</body>
+</html>
