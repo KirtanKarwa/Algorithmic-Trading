@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./Backend
+    ports:
+      - "5000:5000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN}
+    volumes:
+      - ./Backend:/app
+      # Persist sqlite db if used
+      - backend_data:/app/instance
+
+  frontend:
+    build: ./Frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:5000/api
+    depends_on:
+      - backend
+
+volumes:
+  backend_data:
