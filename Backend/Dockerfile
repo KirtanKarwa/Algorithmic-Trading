@@ -20,5 +20,13 @@ EXPOSE 5000
 ENV FLASK_APP=api.py
 ENV FLASK_ENV=production
 
-# Run gunicorn when the container launches
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "api:app"]
+# Create a startup script to run both processes
+RUN echo '#!/bin/bash\n\
+    gunicorn --bind 0.0.0.0:5000 api:app & \n\
+    python main.py \n\
+    wait -n\n\
+    exit $?\n\
+    ' > /app/start.sh && chmod +x /app/start.sh
+
+# Run the startup script
+CMD ["/app/start.sh"]
