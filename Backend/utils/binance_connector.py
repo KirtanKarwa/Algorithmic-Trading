@@ -1,47 +1,56 @@
+import requests
 import pandas as pd
-import numpy as np
+import time
 
-class BollingerRSIStrategy:
-    def __init__(self, df):
-        self.df = df
+class BinanceConnector:
+    def __init__(self, api_key=None, api_secret=None):
+        self.base_url = "https://api.binance.com/api/v3"
+        self.api_key = api_key
+        self.api_secret = api_secret
 
-    def generate_signals(self):
-        df = self.df.copy()
-
-        # --- Bollinger Bands (standard 20-period) ---
-        period = 20
-        mult = 2.0
-        df["sma"] = df["close"].rolling(window=period).mean()
-        df["std"] = df["close"].rolling(window=period).std()
-        df["upper_band"] = df["sma"] + mult * df["std"]
-        df["lower_band"] = df["sma"] - mult * df["std"]
-
-        # --- RSI (14-period) ---
-        delta = df["close"].diff()
-        gain = np.where(delta > 0, delta, 0)
-        loss = np.where(delta < 0, -delta, 0)
-        avg_gain = pd.Series(gain).rolling(window=14).mean()
-        avg_loss = pd.Series(loss).rolling(window=14).mean()
-        rs = avg_gain / (avg_loss + 1e-10)
-        df["rsi"] = 100 - (100 / (1 + rs))
-
-        # --- Signal generation ---
-        df["signal"] = 0
-
-        # BUY when RSI < 40 and price below lower band
-        df.loc[(df["rsi"] < 40) & (df["close"] < df["lower_band"]), "signal"] = 1
-
-        # SELL (short) when RSI > 60 and price above upper band
-        df.loc[(df["rsi"] > 60) & (df["close"] > df["upper_band"]), "signal"] = -1
-
-        # HOLD / EXIT conditions to flip positions naturally
-        # Exit long if RSI > 55
-        df.loc[(df["rsi"] > 55) & (df["signal"] == 1), "signal"] = 0
-        # Exit short if RSI < 45
-        df.loc[(df["rsi"] < 45) & (df["signal"] == -1), "signal"] = 0
-
-        # Replace NaNs and ensure early data is neutral
-        df["signal"].fillna(0, inplace=True)
-        df.loc[:period, "signal"] = 0
-
-        return df
+    def get_klines(self, symbol, interval, lookback):
+        url = f"{self.base_url}/klines"
+        limit = lookback
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "limit": limit
+        }
+        
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Binance kline format:
+            # [
+            #   [
+            #     1499040000000,      // Open time
+            #     "0.01634790",       // Open
+            #     "0.80000000",       // High
+            #     "0.01575800",       // Low
+            #     "0.01577100",       // Close
+            #     "148976.11427815",  // Volume
+            #     1499644799999,      // Close time
+            #     ...
+            #   ]
+            # ]
+            
+            df = pd.DataFrame(data, columns=[
+                "timestamp", "open", "high", "low", "close", "volume", 
+                "close_time", "quote_asset_volume", "number_of_trades", 
+                "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"
+            ])
+            
+            # Convert numeric columns
+            numeric_cols = ["open", "high", "low", "close", "volume"]
+            df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, axis=1)
+            
+            # Convert timestamp to datetime
+            df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
+            
+            return df
+            
+        except Exception as e:
+            print(f"Error fetching data from Binance: {e}")
+            return pd.DataFrame()
