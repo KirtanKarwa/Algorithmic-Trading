@@ -1,3 +1,61 @@
+import os
+import socket
+from utils.force_ipv4 import patch_socket_ipv4
+patch_socket_ipv4()
+
+import logging
+import datetime as dt
+from functools import wraps
+from typing import Optional, List, Dict, Any
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from flask_compress import Compress
+from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
+import jwt as pyjwt
+import json
+import time
+
+load_dotenv()
+
+app = Flask(__name__)
+Compress(app)
+
+# === Config (env-driven with safe defaults) ===
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-change-me")
+
+# Database Configuration with IPv4 Resolution
+database_url = os.getenv("DATABASE_URL", "sqlite:///ai_trader.db")
+
+# If using PostgreSQL, resolve hostname to IPv4 to avoid Render/Supabase IPv6 issues
+if "postgresql" in database_url and "@" in database_url:
+    try:
+        # Extract hostname
+        from urllib.parse import urlparse
+        result = urlparse(database_url)
+        hostname = result.hostname
+        
+        if hostname:
+            # Resolve to IPv4
+            ipv4_ip = socket.gethostbyname(hostname)
+            # Replace hostname with IPv4 IP in the URL
+            database_url = database_url.replace(hostname, ipv4_ip)
+            print(f"✅ Resolved Database Host {hostname} to IPv4: {ipv4_ip}")
+    except Exception as e:
+        print(f"⚠️ Failed to resolve database host to IPv4: {e}")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# CORS: allow your Next.js dev server; tighten in production
+CORS(app, resources={r"/api/*": {"origins": [os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")]}},
+     expose_headers=["Authorization", "Content-Type"],
+     allow_headers=["Authorization", "Content-Type"]) 
+
+# Optional separate models module
+try:
+    from models import db, Trade, Position, EquitySnapshot  # type: ignore
     db.init_app(app)
 except Exception:
     Trade = Position = EquitySnapshot = None  # type: ignore
