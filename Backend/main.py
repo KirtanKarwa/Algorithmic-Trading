@@ -2,7 +2,7 @@
 
 import time
 from utils.binance_connector import BinanceConnector
-from strategy.rsi_ema import generate_signals
+from strategy.rsi_ema import RSIEMAStrategy
 from alerts.telegram_alert import TelegramAlert  # type: ignore # Make sure this file exists
 import config  # type: ignore # contains API_KEY and API_SECRET
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
@@ -35,7 +35,8 @@ def main():
     while True:
         try:
             df = binance.get_klines(symbol=SYMBOL, interval=INTERVAL, lookback=LOOKBACK)
-            signals = generate_signals(df)
+            strategy = RSIEMAStrategy(df)
+            signals = strategy.generate_signals()
             latest = signals.iloc[-1]
 
             print(f"\n🕒 {latest['time']} | {SYMBOL} | Price: {latest['close']}")
