@@ -1,4 +1,7 @@
 import os
+from utils.force_ipv4 import patch_socket_ipv4
+patch_socket_ipv4()
+
 import logging
 import datetime as dt
 from functools import wraps

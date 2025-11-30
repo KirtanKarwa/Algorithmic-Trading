@@ -1,6 +1,9 @@
 # main.py
 
 import time
+from utils.force_ipv4 import patch_socket_ipv4
+patch_socket_ipv4()
+
 from utils.binance_connector import BinanceConnector
 from strategy.rsi_ema import RSIEMAStrategy
 from alerts.telegram_alert import TelegramAlert  # type: ignore # Make sure this file exists
