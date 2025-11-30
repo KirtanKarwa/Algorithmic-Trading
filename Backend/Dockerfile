@@ -21,12 +21,18 @@ ENV FLASK_APP=api.py
 ENV FLASK_ENV=production
 
 # Create a startup script to run both processes
-RUN echo '#!/bin/bash\n\
-    gunicorn --bind 0.0.0.0:5000 api:app & \n\
-    python main.py \n\
-    wait -n\n\
-    exit $?\n\
-    ' > /app/start.sh && chmod +x /app/start.sh
+# Start Gunicorn in the background
+gunicorn --bind 0.0.0.0:5000 api:app &
+
+# Start the trading bot in the background
+python main.py &
+
+# Wait for any process to exit
+wait -n
+
+# Exit with status of process that exited first
+exit $?
+' > /app/start.sh && chmod +x /app/start.sh
 
 # Run the startup script
 CMD ["/app/start.sh"]
