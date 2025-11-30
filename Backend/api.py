@@ -1,16 +1,3 @@
-from functools import wraps
-from typing import Optional, List, Dict, Any
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
-from flask_compress import Compress
-from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
-     allow_headers=["Authorization", "Content-Type"]) 
-
-# Optional separate models module
-try:
-    from models import db, Trade, Position, EquitySnapshot  # type: ignore
     db.init_app(app)
 except Exception:
     Trade = Position = EquitySnapshot = None  # type: ignore
