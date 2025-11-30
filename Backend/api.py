@@ -1,9 +1,3 @@
-import os
-from utils.force_ipv4 import patch_socket_ipv4
-patch_socket_ipv4()
-
-import logging
-import datetime as dt
 from functools import wraps
 from typing import Optional, List, Dict, Any
 from flask import Flask, jsonify, request
@@ -12,23 +6,6 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_compress import Compress
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-import jwt as pyjwt
-import json
-import time
-
-load_dotenv()
-
-app = Flask(__name__)
-Compress(app)
-
-# === Config (env-driven with safe defaults) ===
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-change-me")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///ai_trader.db")
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-# CORS: allow your Next.js dev server; tighten in production
-CORS(app, resources={r"/api/*": {"origins": [os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")]}},
-     expose_headers=["Authorization", "Content-Type"],
      allow_headers=["Authorization", "Content-Type"]) 
 
 # Optional separate models module
