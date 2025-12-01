@@ -1,6 +1,9 @@
 import pandas as pd
 import requests
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_historical_klines_df(symbol, interval="15m", start=None, end=None):
     """
@@ -12,6 +15,8 @@ def get_historical_klines_df(symbol, interval="15m", start=None, end=None):
     start_ts = int(pd.Timestamp(start).timestamp() * 1000)
     end_ts = int(pd.Timestamp(end).timestamp() * 1000)
     all_data = []
+    
+    logger.info(f"Fetching Binance data for {symbol} {interval} from {start} to {end}")
 
     while True:
         params = {
@@ -25,17 +30,22 @@ def get_historical_klines_df(symbol, interval="15m", start=None, end=None):
         
         # Check for HTTP errors
         if resp.status_code != 200:
-            print(f"Binance API error: {resp.status_code} - {resp.text}")
+            error_msg = f"Binance API HTTP error: {resp.status_code} - {resp.text}"
+            logger.error(error_msg)
+            print(error_msg)
             break
             
         data = resp.json()
         
         # Check if response is an error dict instead of list
         if isinstance(data, dict):
-            print(f"Binance API returned error: {data}")
+            error_msg = f"Binance API returned error dict: {data}"
+            logger.error(error_msg)
+            print(error_msg)
             break
             
         if not data or len(data) == 0:
+            logger.warning(f"Binance returned empty data for {symbol}")
             break
 
         all_data.extend(data)
