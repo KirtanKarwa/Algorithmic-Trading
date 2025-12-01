@@ -78,13 +78,21 @@ function toDisplayDate(iso: string): string {
 }
 
 function toIsoDate(display: string): string | null {
-  // Accept DD/MM/YYYY and normalize to YYYY-MM-DD; fallback null if invalid
+  // Accept DD/MM/YYYY and normalize to YYYY-MM-DD; return null if invalid
   const m = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (!m) return null
   const d = m[1].padStart(2, "0")
   const mo = m[2].padStart(2, "0")
   const y = m[3]
-  return `${y}-${mo}-${d}`
+  const isoDate = `${y}-${mo}-${d}`
+
+  // Validate that the date is actually valid (e.g., no Feb 30)
+  const dateObj = new Date(isoDate)
+  const isValid = dateObj.getFullYear() === parseInt(y) &&
+    dateObj.getMonth() === parseInt(mo) - 1 &&
+    dateObj.getDate() === parseInt(d)
+
+  return isValid ? isoDate : null
 }
 
 export default function BacktestingPage() {
@@ -249,7 +257,15 @@ export default function BacktestingPage() {
                 onChange={(e) => setFromText(e.target.value)}
                 onBlur={() => {
                   const iso = toIsoDate(fromText)
-                  if (iso) setRange({ ...range, from: iso })
+                  if (iso) {
+                    setRange({ ...range, from: iso })
+                  } else if (fromText.match(/\d{1,2}\/\d{1,2}\/\d{4}/)) {
+                    toast({
+                      title: "Invalid date",
+                      description: `"${fromText}" is not a valid date. Please check day/month.`,
+                      variant: "destructive" as any
+                    })
+                  }
                 }}
               />
             </div>
@@ -263,7 +279,15 @@ export default function BacktestingPage() {
                 onChange={(e) => setToText(e.target.value)}
                 onBlur={() => {
                   const iso = toIsoDate(toText)
-                  if (iso) setRange({ ...range, to: iso })
+                  if (iso) {
+                    setRange({ ...range, to: iso })
+                  } else if (toText.match(/\d{1,2}\/\d{1,2}\/\d{4}/)) {
+                    toast({
+                      title: "Invalid date",
+                      description: `"${toText}" is not a valid date. Please check day/month.`,
+                      variant: "destructive" as any
+                    })
+                  }
                 }}
               />
             </div>
