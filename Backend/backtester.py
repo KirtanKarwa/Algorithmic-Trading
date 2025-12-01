@@ -37,9 +37,13 @@ class Backtester:
 
     def fetch_data(self):
         print(f"🌐 Fetching data for {self.symbol} ({self.interval})...")
+        print(f"   Date range: {self.start} to {self.end}")
         df = get_historical_klines_df(self.symbol, self.interval, self.start, self.end)
         if df is None or df.empty:
-            raise ValueError("No data fetched for backtest.")
+            error_msg = f"No data fetched for {self.symbol} ({self.interval}) from {self.start} to {self.end}. Check symbol name and date range."
+            print(f"❌ {error_msg}")
+            raise ValueError(error_msg)
+        print(f"✅ Fetched {len(df)} candles")
         return df
 
     def apply_strategy(self, df):
