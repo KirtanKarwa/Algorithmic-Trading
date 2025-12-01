@@ -1,84 +1,128 @@
 import pandas as pd
-import requests
-import time
+import yfinance as yf
 import logging
 
 logger = logging.getLogger(__name__)
 
 def get_historical_klines_df(symbol, interval="15m", start=None, end=None):
     """
-    Fetch historical klines between start and end dates (inclusive).
-    Returns DataFrame with open, high, low, close, volume
-    """
-    url = "https://api.binance.com/api/v3/klines"
-    limit = 1000
-    start_ts = int(pd.Timestamp(start).timestamp() * 1000)
-    end_ts = int(pd.Timestamp(end).timestamp() * 1000)
-    all_data = []
+    Fetch historical klines using Yahoo Finance (no geo-restrictions).
     
-    logger.info(f"Fetching Binance data for {symbol} {interval} from {start} to {end}")
-
-    while True:
-        params = {
-            "symbol": symbol.upper(),
-            "interval": interval,
-            "limit": limit,
-            "startTime": start_ts,
-            "endTime": end_ts
-        }
-        resp = requests.get(url, params=params, timeout=10)
+    Symbol format: Use Yahoo format like 'BTC-USD', 'ETH-USD' 
+    (or pass 'BTCUSDT' and it will auto-convert)
+    
+    Interval mapping:
+    - '1m', '5m', '15m', '30m' -> '1m', '5m', '15m', '30m'
+    - '1h', '4h' -> '1h', '4h'  
+    - '1d' -> '1d'
+    """
+    # Convert Binance-style symbols to Yahoo format
+    if symbol.endswith('USDT'):
+        yf_symbol = symbol.replace('USDT', '-USD')
+    elif symbol.endswith('BUSD'):
+        yf_symbol = symbol.replace('BUSD', '-USD')
+    elif '-' not in symbol:
+        yf_symbol = f"{symbol}-USD"
+    else:
+        yf_symbol = symbol
+    
+    # Yahoo Finance interval mapping
+    interval_map = {
+        '1m': '1m',
+        '5m': '5m', 
+        '15m': '15m',
+        '30m': '30m',
+        '1h': '1h',
+        '2h': '1h',  # Yahoo doesn't have 2h, use 1h
+        '4h': '1h',  # Yahoo doesn't have 4h, use 1h
+        '1d': '1d',
+    }
+    yf_interval = interval_map.get(interval, '1h')
+    
+    logger.info(f"Fetching Yahoo Finance data for {yf_symbol} ({yf_interval}) from {start} to {end}")
+    
+    try:
+        # Download data from Yahoo Finance
+        df = yf.download(
+            yf_symbol, 
+            start=start, 
+            end=end, 
+            interval=yf_interval,
+            progress=False,
+            auto_adjust=True  # Adjust for splits/dividends
+        )
         
-        # Check for HTTP errors
-        if resp.status_code != 200:
-            error_msg = f"Binance API HTTP error: {resp.status_code} - {resp.text}"
-            logger.error(error_msg)
-            print(error_msg)
-            break
-            
-        data = resp.json()
+        if df is None or df.empty:
+            logger.warning(f"Yahoo Finance returned empty data for {yf_symbol}")
+            return pd.DataFrame()
         
-        # Check if response is an error dict instead of list
-        if isinstance(data, dict):
-            error_msg = f"Binance API returned error dict: {data}"
-            logger.error(error_msg)
-            print(error_msg)
-            break
-            
-        if not data or len(data) == 0:
-            logger.warning(f"Binance returned empty data for {symbol}")
-            break
+        # Rename columns to match expected format
+        df.columns = df.columns.str.lower()
+        
+        # Yahoo Finance returns: Open, High, Low, Close, Volume
+        # We need: open, high, low, close, volume
+        expected_cols = ['open', 'high', 'low', 'close', 'volume']
+        
+        # Keep only the columns we need
+        df = df[[col for col in expected_cols if col in df.columns]]
+        
+        logger.info(f"✅ Fetched {len(df)} candles from Yahoo Finance")
+        return df
+        
+    except Exception as e:
+        error_msg = f"Yahoo Finance error for {yf_symbol}: {str(e)}"
+        logger.error(error_msg)
+        print(error_msg)
+        return pd.DataFrame()
 
-        all_data.extend(data)
-        last_time = data[-1][0]
-        if last_time >= end_ts or len(data) < limit:
-            break
-        start_ts = last_time + 1
-        time.sleep(0.2)
-
-    df = pd.DataFrame(all_data, columns=[
-        "timestamp","open","high","low","close","volume",
-        "close_time","quote_asset_volume","number_of_trades",
-        "taker_buy_base","taker_buy_quote","ignore"
-    ])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df.set_index("timestamp", inplace=True)
-    df = df[["open","high","low","close","volume"]].astype(float)
-    return df
 
 def get_klines(symbol, interval="1m", limit=100):
-    """Helper for live/multi-coin trading"""
-    url = "https://api.binance.com/api/v3/klines"
-    params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
-    resp = requests.get(url, params=params)
-    data = resp.json()
-    if not data:
+    """
+    Helper for live/recent data fetching.
+    Fetches the most recent 'limit' candles.
+    """
+    # Convert symbol format
+    if symbol.endswith('USDT'):
+        yf_symbol = symbol.replace('USDT', '-USD')
+    elif '-' not in symbol:
+        yf_symbol = f"{symbol}-USD"
+    else:
+        yf_symbol = symbol
+    
+    interval_map = {
+        '1m': '1m',
+        '5m': '5m',
+        '15m': '15m', 
+        '1h': '1h',
+        '1d': '1d'
+    }
+    yf_interval = interval_map.get(interval, '1m')
+    
+    try:
+        # Get recent data (last few days to ensure we get enough candles)
+        period = '7d' if interval in ['1m', '5m'] else '60d'
+        
+        df = yf.download(
+            yf_symbol,
+            period=period,
+            interval=yf_interval,
+            progress=False,
+            auto_adjust=True
+        )
+        
+        if df is None or df.empty:
+            return pd.DataFrame()
+        
+        # Take only the last 'limit' rows
+        df = df.tail(limit)
+        
+        # Rename columns
+        df.columns = df.columns.str.lower()
+        expected_cols = ['open', 'high', 'low', 'close', 'volume']
+        df = df[[col for col in expected_cols if col in df.columns]]
+        
+        return df
+        
+    except Exception as e:
+        logger.error(f"Yahoo Finance error: {e}")
         return pd.DataFrame()
-    df = pd.DataFrame(data, columns=[
-        "timestamp","open","high","low","close","volume",
-        "close_time","quote_asset_volume","number_of_trades",
-        "taker_buy_base","taker_buy_quote","ignore"
-    ])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df.set_index("timestamp", inplace=True)
-    df = df[["open","high","low","close","volume"]].astype(float)
-    return df
