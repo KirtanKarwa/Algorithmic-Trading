@@ -1,111 +1,147 @@
 import pandas as pd
 import requests
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 
 logger = logging.getLogger(__name__)
 
-# CoinGecko API endpoints (free, no auth required)
-COINGECKO_API = "https://api.coingecko.com/api/v3"
+# CryptoCompare API (free, 100k calls/month, no geo-restrictions)
+CRYPTOCOMPARE_API = "https://min-api.cryptocompare.com/data"
 
-# Symbol mapping: our format -> CoinGecko ID
-SYMBOL_MAP = {
-    'BTC-USD': 'bitcoin',
-    'BTCUSDT': 'bitcoin',
-    'ETH-USD': 'ethereum',
-    'ETHUSDT': 'ethereum',
-    'BNB-USD': 'binancecoin',
-    'BNBUSDT': 'binancecoin',
-    'SOL-USD': 'solana',
-    'SOLUSDT': 'solana',
-    'XRP-USD': 'ripple',
-    'XRPUSDT': 'ripple',
-    'ADA-USD': 'cardano',
-    'ADAUSDT': 'cardano',
-    'DOGE-USD': 'dogecoin',
-    'DOGEUSDT': 'dogecoin',
-    'MATIC-USD': 'matic-network',
-    'MATICUSDT': 'matic-network',
-    'DOT-USD': 'polkadot',
-    'DOTUSDT': 'polkadot',
-    'AVAX-USD': 'avalanche-2',
-    'AVAXUSDT': 'avalanche-2',
-}
-
-def get_coingecko_id(symbol: str) -> str:
-    """Convert symbol to CoinGecko ID"""
-    return SYMBOL_MAP.get(symbol.upper(), 'bitcoin')
+# Symbol mapping: handle various formats
+def get_crypto_symbol(symbol: str) -> str:
+    """Extract crypto symbol from various formats"""
+    symbol = symbol.upper()
+    
+    # Remove common suffixes
+    if symbol.endswith('USDT'):
+        return symbol.replace('USDT', '')
+    elif symbol.endswith('-USD'):
+        return symbol.replace('-USD', '')
+    elif symbol.endswith('USD'):
+        return symbol.replace('USD', '')
+    
+    return symbol
 
 
 def get_historical_klines_df(symbol, interval="15m", start=None, end=None):
     """
-    Fetch historical data from CoinGecko (free, no geo-restrictions).
+    Fetch historical data from CryptoCompare (free, reliable, no geo-restrictions).
     
-    Symbol: BTC-USD, ETH-USD, etc (auto-converts to CoinGecko IDs)
-    Interval: Not used by CoinGecko (returns daily data), but kept for compatibility
+    Symbol: BTC, ETH, BTC-USD, BTCUSDT (all formats work)
+    Interval: 1m, 5m, 15m, 30m, 1h, 2h, 4h, 1d
     """
-    coin_id = get_coingecko_id(symbol)
+    crypto_symbol = get_crypto_symbol(symbol)
     
     # Convert dates to timestamps
     start_ts = int(pd.Timestamp(start).timestamp())
     end_ts = int(pd.Timestamp(end).timestamp())
     
-    logger.info(f"Fetching CoinGecko data for {symbol} ({coin_id}) from {start} to {end}")
+    logger.info(f"Fetching CryptoCompare data for {symbol} ({crypto_symbol}) from {start} to {end}")
+    
+    # Map interval to CryptoCompare endpoints
+    if interval in ['1m', '5m', '15m', '30m']:
+        endpoint = 'histominute'
+        if interval == '5m':
+            aggregate = 5
+        elif interval == '15m':
+            aggregate = 15
+        elif interval == '30m':
+            aggregate = 30
+        else:
+            aggregate = 1
+    elif interval in ['1h', '2h', '4h']:
+        endpoint = 'histohour'
+        if interval == '2h':
+            aggregate = 2
+        elif interval == '4h':
+            aggregate = 4
+        else:
+            aggregate = 1
+    else:  # 1d or any other
+        endpoint = 'histoday'
+        aggregate = 1
     
     try:
-        # CoinGecko market_chart/range endpoint
-        url = f"{COINGECKO_API}/coins/{coin_id}/market_chart/range"
-        params = {
-            'vs_currency': 'usd',
-            'from': start_ts,
-            'to': end_ts
-        }
+        all_data = []
+        current_ts = start_ts
         
-        response = requests.get(url, params=params, timeout=30)
+        # CryptoCompare returns max 2000 points per request
+        limit = 2000
         
-        if response.status_code != 200:
-            error_msg = f"CoinGecko API error: {response.status_code} - {response.text}"
-            logger.error(error_msg)
-            print(error_msg)
-            return pd.DataFrame()
+        while current_ts < end_ts:
+            url = f"{CRYPTOCOMPARE_API}/{endpoint}"
+            params = {
+                'fsym': crypto_symbol,
+                'tsym': 'USD',
+                'limit': limit,
+                'toTs': min(end_ts, current_ts + (limit * aggregate * 60)),
+                'aggregate': aggregate
+            }
+            
+            response = requests.get(url, params=params, timeout=30)
+            
+            if response.status_code != 200:
+                error_msg = f"CryptoCompare API error: {response.status_code} - {response.text}"
+                logger.error(error_msg)
+                print(error_msg)
+                break
+            
+            data = response.json()
+            
+            if data.get('Response') == 'Error':
+                error_msg = f"CryptoCompare error: {data.get('Message', 'Unknown error')}"
+                logger.error(error_msg)
+                print(error_msg)
+                break
+            
+            if 'Data' not in data or not data['Data']:
+                logger.warning(f"No data returned for {crypto_symbol}")
+                break
+            
+            candles = data['Data']
+            all_data.extend(candles)
+            
+            # Update current_ts to the last timestamp + 1
+            last_ts = candles[-1]['time']
+            if last_ts >= end_ts or len(candles) < limit:
+                break
+            current_ts = last_ts + 1
+            
+            # Avoid rate limits
+            time.sleep(0.1)
         
-        data = response.json()
-        
-        # CoinGecko returns: {prices: [[timestamp, price], ...], market_caps: [...], total_volumes: [...]}
-        if 'prices' not in data or not data['prices']:
-            logger.warning(f"CoinGecko returned no price data for {coin_id}")
+        if not all_data:
+            logger.warning(f"CryptoCompare returned no data for {crypto_symbol}")
             return pd.DataFrame()
         
         # Convert to DataFrame
-        prices_df = pd.DataFrame(data['prices'], columns=['timestamp', 'close'])
-        volumes_df = pd.DataFrame(data.get('total_volumes', []), columns=['timestamp', 'volume'])
+        df = pd.DataFrame(all_data)
         
-        # Merge price and volume data
-        df = prices_df.merge(volumes_df, on='timestamp', how='left')
-        
-        # Convert timestamp from milliseconds to datetime
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        # CryptoCompare returns: time, open, high, low, close, volumefrom, volumeto
+        df['timestamp'] = pd.to_datetime(df['time'], unit='s')
         df.set_index('timestamp', inplace=True)
         
-        # CoinGecko only provides close prices, so we'll approximate OHLC
-        # For backtesting purposes, we'll use close price for all OHLC values
-        # This is a limitation but acceptable for historical analysis
-        df['open'] = df['close']
-        df['high'] = df['close']
-        df['low'] = df['close']
+        # Filter by date range
+        df = df[(df.index >= pd.Timestamp(start)) & (df.index <= pd.Timestamp(end))]
         
-        # Reorder columns to match expected format
-        df = df[['open', 'high', 'low', 'close', 'volume']]
+        # Rename/select columns to match expected format
+        df = df.rename(columns={
+            'open': 'open',
+            'high': 'high', 
+            'low': 'low',
+            'close': 'close',
+            'volumefrom': 'volume'  # Use volumefrom (crypto volume)
+        })
         
-        # Fill any missing volume data with 0
-        df['volume'] = df['volume'].fillna(0)
+        df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
         
-        logger.info(f"✅ Fetched {len(df)} data points from CoinGecko")
+        logger.info(f"✅ Fetched {len(df)} candles from CryptoCompare")
         return df
         
     except Exception as e:
-        error_msg = f"CoinGecko error for {symbol}: {str(e)}"
+        error_msg = f"CryptoCompare error for {symbol}: {str(e)}"
         logger.error(error_msg)
         print(error_msg)
         return pd.DataFrame()
@@ -114,53 +150,63 @@ def get_historical_klines_df(symbol, interval="15m", start=None, end=None):
 def get_klines(symbol, interval="1m", limit=100):
     """
     Fetch recent data for live trading.
-    Gets the last 'limit' days of data.
+    Gets the last 'limit' candles.
     """
-    coin_id = get_coingecko_id(symbol)
+    crypto_symbol = get_crypto_symbol(symbol)
+    
+    # Map interval to endpoint
+    if interval in ['1m', '5m', '15m', '30m']:
+        endpoint = 'histominute'
+        if interval == '5m':
+            aggregate = 5
+        elif interval == '15m':
+            aggregate = 15
+        elif interval == '30m':
+            aggregate = 30
+        else:
+            aggregate = 1
+    elif interval in ['1h', '2h', '4h']:
+        endpoint = 'histohour'
+        if interval == '2h':
+            aggregate = 2
+        elif interval == '4h':
+            aggregate = 4
+        else:
+            aggregate = 1
+    else:
+        endpoint = 'histoday'
+        aggregate = 1
     
     try:
-        # Get data for last N days
-        days = min(limit, 365)  # CoinGecko free tier limit
-        
-        url = f"{COINGECKO_API}/coins/{coin_id}/market_chart"
+        url = f"{CRYPTOCOMPARE_API}/{endpoint}"
         params = {
-            'vs_currency': 'usd',
-            'days': days,
-            'interval': 'daily' if days > 90 else 'hourly'
+            'fsym': crypto_symbol,
+            'tsym': 'USD',
+            'limit': limit,
+            'aggregate': aggregate
         }
         
         response = requests.get(url, params=params, timeout=30)
         
         if response.status_code != 200:
-            logger.error(f"CoinGecko API error: {response.status_code}")
+            logger.error(f"CryptoCompare API error: {response.status_code}")
             return pd.DataFrame()
         
         data = response.json()
         
-        if 'prices' not in data or not data['prices']:
+        if data.get('Response') == 'Error' or 'Data' not in data or not data['Data']:
             return pd.DataFrame()
         
         # Convert to DataFrame
-        prices_df = pd.DataFrame(data['prices'], columns=['timestamp', 'close'])
-        volumes_df = pd.DataFrame(data.get('total_volumes', []), columns=['timestamp', 'volume'])
-        
-        df = prices_df.merge(volumes_df, on='timestamp', how='left')
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df = pd.DataFrame(data['Data'])
+        df['timestamp'] = pd.to_datetime(df['time'], unit='s')
         df.set_index('timestamp', inplace=True)
         
-        # Approximate OHLC from close prices
-        df['open'] = df['close']
-        df['high'] = df['close']
-        df['low'] = df['close']
-        df['volume'] = df['volume'].fillna(0)
+        df = df.rename(columns={'volumefrom': 'volume'})
+        df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
         
-        # Take only the last 'limit' rows
-        df = df.tail(limit)
-        
-        df = df[['open', 'high', 'low', 'close', 'volume']]
-        
-        return df
+        return df.tail(limit)
         
     except Exception as e:
-        logger.error(f"CoinGecko error: {e}")
+        logger.error(f"CryptoCompare error: {e}")
         return pd.DataFrame()
