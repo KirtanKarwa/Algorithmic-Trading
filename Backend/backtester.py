@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import os
 import mplfinance as mpf
 from datetime import datetime
+from typing import Optional
 from strategy_loader import load_strategy_class
 from binance_data import get_historical_klines_df
 
@@ -18,7 +19,7 @@ TRADING_FEE = 0.001  # 0.1%
 SLIPPAGE = 0.0005    # 0.05%
 
 class Backtester:
-    def __init__(self, symbol, interval, strategy_class, start, end, strategy_params: dict | None = None):
+    def __init__(self, symbol, interval, strategy_class, start, end, strategy_params: Optional[dict] = None):
         self.symbol = symbol
         self.interval = interval
         self.strategy_class = strategy_class
