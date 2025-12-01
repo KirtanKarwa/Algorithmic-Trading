@@ -89,12 +89,12 @@ function toIsoDate(display: string): string | null {
 
 export default function BacktestingPage() {
   const { toast } = useToast()
-  const [symbol, setSymbol] = useState("BTCUSDT")
+  const [symbol, setSymbol] = useState("BTC-USD")
   const [strategy, setStrategy] = useState("RSI_EMA")
   const [interval, setInterval] = useState("1h")
-  const [range, setRange] = useState({ from: "2025-01-01", to: "2025-02-01" })
-  const [fromText, setFromText] = useState<string>(toDisplayDate("2025-01-01"))
-  const [toText, setToText] = useState<string>(toDisplayDate("2025-02-01"))
+  const [range, setRange] = useState({ from: "2024-01-01", to: "2024-11-30" })
+  const [fromText, setFromText] = useState<string>(toDisplayDate("2024-01-01"))
+  const [toText, setToText] = useState<string>(toDisplayDate("2024-11-30"))
   const [localResult, setLocalResult] = useState<any>(null)
   const [isRunning, setIsRunning] = useState(false)
   const swrKey = `/api/backtest?strategy=${encodeURIComponent(strategy)}`
@@ -126,7 +126,7 @@ export default function BacktestingPage() {
         const composed = { equity, trades, stats }
         setLocalResult(composed)
         await mutate(composed, false)
-      } catch {}
+      } catch { }
       await mutate()
       toast({ title: "Backtest complete", description: "Results are ready." })
     } catch (e: any) {
@@ -157,8 +157,8 @@ export default function BacktestingPage() {
               <CardTitle className="text-2xl font-bold">Backtest Control Panel</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Configure and execute strategy backtests</p>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 const logsSection = document.getElementById('trade-logs-section')
                 logsSection?.scrollIntoView({ behavior: 'smooth' })
@@ -175,12 +175,23 @@ export default function BacktestingPage() {
             {/* Trading Pair */}
             <div className="col-span-12 md:col-span-2 space-y-1">
               <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Symbol</Label>
-              <Input
-                className="h-11 bg-background border-2"
-                placeholder="BTCUSDT"
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value)}
-              />
+              <Select value={symbol} onValueChange={setSymbol}>
+                <SelectTrigger className="h-11 bg-background border-2">
+                  <SelectValue placeholder="Select symbol" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BTC-USD">BTC-USD (Bitcoin)</SelectItem>
+                  <SelectItem value="ETH-USD">ETH-USD (Ethereum)</SelectItem>
+                  <SelectItem value="BNB-USD">BNB-USD (Binance Coin)</SelectItem>
+                  <SelectItem value="SOL-USD">SOL-USD (Solana)</SelectItem>
+                  <SelectItem value="XRP-USD">XRP-USD (Ripple)</SelectItem>
+                  <SelectItem value="ADA-USD">ADA-USD (Cardano)</SelectItem>
+                  <SelectItem value="DOGE-USD">DOGE-USD (Dogecoin)</SelectItem>
+                  <SelectItem value="MATIC-USD">MATIC-USD (Polygon)</SelectItem>
+                  <SelectItem value="DOT-USD">DOT-USD (Polkadot)</SelectItem>
+                  <SelectItem value="AVAX-USD">AVAX-USD (Avalanche)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Strategy */}
@@ -260,9 +271,9 @@ export default function BacktestingPage() {
             {/* Run Button */}
             <div className="col-span-12 md:col-span-2 space-y-1">
               <Label className="text-xs font-bold uppercase tracking-wider text-transparent">Run</Label>
-              <Button 
-                onClick={run} 
-                disabled={isRunning} 
+              <Button
+                onClick={run}
+                disabled={isRunning}
                 className="h-11 w-full font-semibold"
               >
                 {isRunning ? (
@@ -325,8 +336,8 @@ export default function BacktestingPage() {
                 <div className="text-sm text-muted-foreground">
                   {effective?.trades?.rows?.length || 0} trades executed
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => {
                     const trades = effective?.trades?.rows || []
@@ -334,7 +345,7 @@ export default function BacktestingPage() {
                       toast({ title: "No trades to export", variant: "destructive" })
                       return
                     }
-                    
+
                     const headers = ["Time", "Symbol", "Side", "Entry", "Exit", "P/L", "Strategy"]
                     const csv = [
                       headers.join(","),
@@ -348,7 +359,7 @@ export default function BacktestingPage() {
                         trade.strategy || ""
                       ].join(",")),
                     ].join("\n")
-                    
+
                     const blob = new Blob([csv], { type: "text/csv" })
                     const url = URL.createObjectURL(blob)
                     const a = document.createElement("a")
@@ -390,9 +401,8 @@ export default function BacktestingPage() {
                           </td>
                           <td className="py-3 px-4 font-medium">{trade.symbol || symbol}</td>
                           <td className="py-3 px-4">
-                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ${
-                              trade.side === 'Long' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                            }`}>
+                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ${trade.side === 'Long' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                              }`}>
                               {trade.side}
                             </span>
                           </td>
@@ -402,9 +412,8 @@ export default function BacktestingPage() {
                           <td className="py-3 px-4 text-right tabular-nums">
                             ${typeof trade.exit === 'number' ? trade.exit.toFixed(2) : trade.exit}
                           </td>
-                          <td className={`py-3 px-4 text-right tabular-nums ${
-                            Number(trade.pnl) >= 0 ? 'text-green-400' : 'text-red-400'
-                          }`}>
+                          <td className={`py-3 px-4 text-right tabular-nums ${Number(trade.pnl) >= 0 ? 'text-green-400' : 'text-red-400'
+                            }`}>
                             {typeof trade.pnl === 'number' ? (trade.pnl * 100).toFixed(2) + '%' : trade.pnl}
                           </td>
                           <td className="py-3 px-4">
