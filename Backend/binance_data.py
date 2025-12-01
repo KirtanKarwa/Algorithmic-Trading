@@ -21,9 +21,21 @@ def get_historical_klines_df(symbol, interval="15m", start=None, end=None):
             "startTime": start_ts,
             "endTime": end_ts
         }
-        resp = requests.get(url, params=params)
+        resp = requests.get(url, params=params, timeout=10)
+        
+        # Check for HTTP errors
+        if resp.status_code != 200:
+            print(f"Binance API error: {resp.status_code} - {resp.text}")
+            break
+            
         data = resp.json()
-        if not data:
+        
+        # Check if response is an error dict instead of list
+        if isinstance(data, dict):
+            print(f"Binance API returned error: {data}")
+            break
+            
+        if not data or len(data) == 0:
             break
 
         all_data.extend(data)
